@@ -250,6 +250,24 @@
   }
   .alert-box strong { font-weight: 600; }
   
+  /* 底部声明 */
+  .footer-declaration {
+    text-align: center;
+    margin-top: 30px;
+    font-size: 13px;
+    color: #a0a6b1;
+    line-height: 2;
+  }
+  .footer-declaration a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.2s;
+  }
+  .footer-declaration a:hover {
+    color: var(--primary);
+  }
+
   #fileInput { display: none; }
 </style>
 </head>
@@ -316,6 +334,13 @@
 
   <div class="alert-box">
     <strong>关于批量与画质：</strong>批量同样遵循「JPEG 有损、PNG 无损」的规则。如果批次里混合了不同来源的乱图，请先确认它们由同一套算法产生，否则无法用一个方向全部还原。
+  </div>
+
+  <!-- 底部声明区 -->
+  <div class="footer-declaration">
+    算法基于 <a href="https://github.com/jiarandiana0307/PicEncrypt" target="_blank">jiarandiana0307/PicEncrypt</a> 的开源项目 ·
+    参考自 <a href="https://singularpoint.cn/hidelmg1.html" target="_blank">singularpoint.cn/hidelmg1.html</a><br>
+    本实现为独立编写的 Web 版本 · <a href="#" target="_blank">GitHub</a>
   </div>
 </div>
 
