@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>批量小番茄解混淆</title>
+<style>
+  :root {
+    --bg-color: #f4f7fb;
+    --text-main: #1d2129;
+    --text-sub: #86909c;
+    --primary: #0066cc;
+    --primary-hover: #0052a3;
+    --success: #00b42a;
+    --border-color: #e5e6eb;
+    --card-bg: #ffffff;
+    --warning-bg: #fffbe6;
+    --warning-border: #ffe58f;
+    --warning-text: #d48806;
+    
+    /* 单图按钮颜色 */
+    --color-scramble: #7323cc;
+    --color-unscramble: #f04f68;
+    --color-reset: #fa8c16;
+    --color-download: #1890ff;
+  }
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    padding: 40px 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 960px;
+  }
+
+  /* 头部 */
+  .header { text-align: center; margin-bottom: 30px; }
+  .header h1 { font-size: 28px; font-weight: 600; margin-bottom: 12px; }
+  .header p { color: var(--text-sub); font-size: 14px; line-height: 1.6; }
+
+  /* 顶部操作区 */
+  .toolbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  
+  button {
+    border: none; outline: none; cursor: pointer; font-size: 14px;
+    border-radius: 20px; padding: 8px 20px; transition: all 0.2s;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+  
+  .btn-secondary {
+    background: #fff; color: var(--text-main); border: 1px solid var(--border-color);
+  }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+  
+  .btn-text {
+    background: transparent; color: var(--primary); padding: 8px 12px;
+  }
+  .btn-text:hover:not(:disabled) { text-decoration: underline; }
+
+  /* ================= 1. 空状态：拖拽上传区 ================= */
+  .upload-box {
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+    padding: 80px 20px;
+    text-align: center;
+    cursor: pointer;
+    background: #fff;
+    transition: all 0.2s;
+    margin-bottom: 24px;
+  }
+  .upload-box:hover, .upload-box.dragover {
+    border-color: var(--primary);
+    background: #f0f7ff;
+  }
+  .upload-box .icon {
+    font-size: 48px; color: var(--primary); font-weight: 300; line-height: 1; margin-bottom: 12px;
+  }
+  .upload-box p { color: var(--text-sub); font-size: 15px; }
+
+  /* ================= 2. 单图预览区 (图1样式) ================= */
+  .single-workspace { display: none; flex-direction: column; align-items: center; margin-bottom: 24px; }
+  
+  .single-actions {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .btn-action {
+    border-radius: 20px;
+    padding: 8px 24px;
+    font-size: 15px;
+    color: #fff;
+    font-weight: 500;
+  }
+  .btn-action:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+  .btn-scramble { background: var(--color-scramble); }
+  .btn-unscramble { background: var(--color-unscramble); }
+  .btn-reset { background: var(--color-reset); }
+  .btn-download { background: var(--color-download); }
+
+  .single-image-wrap {
+    width: 100%;
+    position: relative;
+    text-align: center;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    min-height: 250px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .single-image-wrap img {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    display: block;
+    border-radius: 4px;
+  }
+  
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--primary);
+    font-weight: 600;
+    backdrop-filter: blur(2px);
+    z-index: 10;
+  }
+
+  /* ================= 3. 批量列表区 (图3样式) ================= */
+  .batch-area { display: none; }
+  
+  .settings-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    color: var(--text-sub);
+  }
+  .setting-item { display: flex; align-items: center; gap: 8px; }
+  select {
+    appearance: none;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 6px 32px 6px 16px;
+    font-size: 14px;
+    color: var(--text-main);
+    outline: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2386909c%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  .stats { color: var(--text-sub); font-size: 14px; margin-left: 12px; }
+
+  .queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  
+  .queue-item {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    transition: opacity 0.3s;
+  }
+  
+  .item-thumb {
+    width: 56px; height: 56px;
+    border-radius: 8px; object-fit: cover;
+    background: #f0f0f0; margin-right: 20px;
+    flex-shrink: 0;
+  }
+
+  .item-info {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  
+  .item-name {
+    font-size: 15px; font-weight: 500; color: var(--text-main);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  
+  .item-meta {
+    font-size: 13px; color: var(--text-sub);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .item-actions {
+    display: flex; align-items: center; gap: 16px;
+    margin-left: 20px; flex-shrink: 0;
+  }
+  
+  .status-text { font-size: 14px; }
+  .status-wait { color: var(--text-sub); }
+  .status-done { color: var(--success); }
+  .status-error { color: #f53f3f; }
+  .status-processing { color: var(--primary); }
+
+  .action-link {
+    background: transparent; color: var(--primary); padding: 0; font-size: 14px;
+    border-radius: 0;
+  }
+  .action-link:hover:not(:disabled) { text-decoration: underline; }
+
+  /* 提示框 */
+  .alert-box {
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: var(--warning-text);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .alert-box strong { font-weight: 600; }
+  
+  #fileInput { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>批量小番茄解混淆</h1>
+    <p>单张流程之外的可选模块。一次选择多张图片排队处理，按队列顺序逐张执行，完成后可打包成 ZIP 下载。<br>批量不改变单张流程的任何行为。</p>
+  </div>
+
+  <div class="toolbar">
+    <input type="file" id="fileInput" multiple accept="image/*">
+    <button class="btn-primary" id="btnAdd">添加图片</button>
+    <button class="btn-secondary" id="btnStart" style="display:none;" disabled>开始批量处理</button>
+    <button class="btn-secondary" id="btnZip" style="display:none;" disabled>打包下载 ZIP</button>
+    <button class="btn-text" id="btnClear" disabled>清空</button>
+  </div>
+
+  <!-- 1. 空状态：拖拽上传区 -->
+  <div class="upload-box" id="uploadBox">
+    <div class="icon">+</div>
+    <p>点击此处或拖拽图片到这里（支持单张或多张）</p>
+  </div>
+
+  <!-- 2. 单图预览区 -->
+  <div class="single-workspace" id="singleWorkspace">
+    <div class="single-actions">
+      <button class="btn-action btn-scramble" id="btnSingleScramble">混淆</button>
+      <button class="btn-action btn-unscramble" id="btnSingleUnscramble">解混淆</button>
+      <button class="btn-action btn-reset" id="btnSingleReset">还原</button>
+      <button class="btn-action btn-download" id="btnSingleDownload">下载</button>
+    </div>
+    <div class="single-image-wrap">
+      <img id="singlePreviewImg" src="" alt="预览图">
+      <div class="loading-overlay" id="singleLoading">处理中...</div>
+    </div>
+  </div>
+
+  <!-- 3. 批量列表区 -->
+  <div class="batch-area" id="batchArea">
+    <div class="settings-bar" id="settingsBar">
+      <div class="setting-item">
+        <span>处理方向</span>
+        <select id="directionSelect">
+          <option value="unscramble">解混淆</option>
+          <option value="scramble">混淆</option>
+        </select>
+      </div>
+      <div class="setting-item">
+        <span>输出格式</span>
+        <select id="formatSelect">
+          <option value="image/jpeg">JPG</option>
+          <option value="image/png">PNG</option>
+        </select>
+      </div>
+      <div class="stats" id="statsText">共 0 张，已完成 0 张。</div>
+    </div>
+    
+    <div class="queue-list" id="queueList">
+      <!-- 动态列表项插入此处 -->
+    </div>
+  </div>
+
+  <div class="alert-box">
+    <strong>关于批量与画质：</strong>批量同样遵循「JPEG 有损、PNG 无损」的规则。如果批次里混合了不同来源的乱图，请先确认它们由同一套算法产生，否则无法用一个方向全部还原。
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* =========================================================
+   1. 核心算法：Gilbert 曲线与处理
+   ========================================================= */
+let _out = null, _ptr = 0, _w = 0;
+
+function gilbertCurveIndices(width, height) {
+  const out = new Int32Array(width * height);
+  _out = out; _ptr = 0; _w = width;
+  if (width >= height) gen2d(0, 0, width, 0, 0, height);
+  else                 gen2d(0, 0, 0, height, width, 0);
+  _out = null;
+  return out;
+}
+
+function gen2d(x, y, ax, ay, bx, by) {
+  const w = Math.abs(ax + ay);
+  const h = Math.abs(bx + by);
+  const dax = Math.sign(ax), day = Math.sign(ay);
+  const dbx = Math.sign(bx), dby = Math.sign(by);
+
+  if (h === 1) {
+    for (let i = 0; i < w; i++) { _out[_ptr++] = x + y * _w; x += dax; y += day; }
+    return;
+  }
+  if (w === 1) {
+    for (let i = 0; i < h; i++) { _out[_ptr++] = x + y * _w; x += dbx; y += dby; }
+    return;
+  }
+
+  let ax2 = Math.floor(ax / 2), ay2 = Math.floor(ay / 2);
+  let bx2 = Math.floor(bx / 2), by2 = Math.floor(by / 2);
+  const w2 = Math.abs(ax2 + ay2);
+  const h2 = Math.abs(bx2 + by2);
+
+  if (2 * w > 3 * h) {
+    if ((w2 % 2) && w > 2) { ax2 += dax; ay2 += day; }
+    gen2d(x, y, ax2, ay2, bx, by);
+    gen2d(x + ax2, y + ay2, ax - ax2, ay - ay2, bx, by);
+  } else {
+    if ((h2 % 2) && h > 2) { bx2 += dbx; by2 += dby; }
+    gen2d(x, y, bx2, by2, ax2, ay2);
+    gen2d(x + bx2, y + by2, ax, ay, bx - bx2, by - by2);
+    gen2d(x + (ax - dax) + (bx2 - dbx),
+          y + (ay - day) + (by2 - dby),
+          -bx2, -by2, -(ax - ax2), -(ay - ay2));
+  }
+}
+
+function processCanvas(img, direction) {
+  const width  = img.naturalWidth  || img.width;
+  const height = img.naturalHeight || img.height;
+  const n = width * height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const src = new Uint32Array(imgData.data.buffer);
+  const dstBuf = new ArrayBuffer(n * 4);
+  const dst = new Uint32Array(dstBuf);
+
+  const curve = gilbertCurveIndices(width, height);
+  let j = Math.round((Math.sqrt(5) - 1) / 2 * n) % n;
+
+  if (direction === 'scramble') {
+    for (let i = 0; i < n; i++) {
+      dst[curve[j]] = src[curve[i]];
+      if (++j === n) j = 0;
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      dst[curve[i]] = src[curve[j]];
+      if (++j === n) j = 0;
+    }
+  }
+
+  imgData.data.set(new Uint8ClampedArray(dstBuf));
+  ctx.putImageData(imgData, 0, 0);
+  return canvas;
+}
+
+/* =========================================================
+   2. ZIP 打包工具
+   ========================================================= */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(u8) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function createZip(entries) {
+  const enc = new TextEncoder();
+  const parts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  const now = new Date();
+  const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+  const dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+
+  for (const { name, data } of entries) {
+    const nameBytes = enc.encode(name);
+    const crc = crc32(data);
+    const size = data.length;
+
+    const lh = new Uint8Array(30 + nameBytes.length);
+    const dv = new DataView(lh.buffer);
+    dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true); dv.setUint16(6, 0x0800, true);
+    dv.setUint16(8, 0, true); dv.setUint16(10, dosTime, true); dv.setUint16(12, dosDate, true);
+    dv.setUint32(14, crc, true); dv.setUint32(18, size, true); dv.setUint32(22, size, true);
+    dv.setUint16(26, nameBytes.length, true); dv.setUint16(28, 0, true);
+    lh.set(nameBytes, 30);
+    parts.push(lh, data);
+
+    const cd = new Uint8Array(46 + nameBytes.length);
+    const dv2 = new DataView(cd.buffer);
+    dv2.setUint32(0, 0x02014b50, true); dv2.setUint16(4, 20, true); dv2.setUint16(6, 20, true);
+    dv2.setUint16(8, 0x0800, true); dv2.setUint16(10, 0, true); dv2.setUint16(12, dosTime, true);
+    dv2.setUint16(14, dosDate, true); dv2.setUint32(16, crc, true); dv2.setUint32(20, size, true);
+    dv2.setUint32(24, size, true); dv2.setUint16(28, nameBytes.length, true);
+    dv2.setUint16(30, 0, true); dv2.setUint16(32, 0, true); dv2.setUint16(34, 0, true);
+    dv2.setUint16(36, 0, true); dv2.setUint32(38, 0, true); dv2.setUint32(42, offset, true);
+    cd.set(nameBytes, 46);
+    centralParts.push(cd);
+
+    offset += lh.length + size;
+  }
+
+  const centralSize = centralParts.reduce((s, p) => s + p.length, 0);
+  const eocd = new Uint8Array(22);
+  const dv = new DataView(eocd.buffer);
+  dv.setUint32(0, 0x06054b50, true); dv.setUint16(4, 0, true); dv.setUint16(6, 0, true);
+  dv.setUint16(8, entries.length, true); dv.setUint16(10, entries.length, true);
+  dv.setUint32(12, centralSize, true); dv.setUint32(16, offset, true); dv.setUint16(20, 0, true);
+
+  return new Blob([...parts, ...centralParts, eocd], { type: 'application/zip' });
+}
+
+/* =========================================================
+   3. 状态与 UI 逻辑
+   ========================================================= */
+let currentMode = 'empty'; // 'empty', 'single', 'batch'
+let queue = []; 
+let isProcessing = false;
+let uid = 0;
+
+// 单图模式专用状态
+let singleFile = null;
+let singleBlob = null;
+let singleDirection = 'original';
+let singleThumbUrl = null;
+
+const dom = {
+  fileInput: document.getElementById('fileInput'),
+  btnAdd: document.getElementById('btnAdd'),
+  btnStart: document.getElementById('btnStart'),
+  btnZip: document.getElementById('btnZip'),
+  btnClear: document.getElementById('btnClear'),
+  
+  uploadBox: document.getElementById('uploadBox'),
+  singleWorkspace: document.getElementById('singleWorkspace'),
+  singlePreviewImg: document.getElementById('singlePreviewImg'),
+  singleLoading: document.getElementById('singleLoading'),
+  btnSingleScramble: document.getElementById('btnSingleScramble'),
+  btnSingleUnscramble: document.getElementById('btnSingleUnscramble'),
+  btnSingleReset: document.getElementById('btnSingleReset'),
+  btnSingleDownload: document.getElementById('btnSingleDownload'),
+
+  batchArea: document.getElementById('batchArea'),
+  settingsBar: document.getElementById('settingsBar'),
+  directionSelect: document.getElementById('directionSelect'),
+  formatSelect: document.getElementById('formatSelect'),
+  statsText: document.getElementById('statsText'),
+  queueList: document.getElementById('queueList')
+};
+
+function formatSize(bytes) {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function updateUI() {
+  if (currentMode === 'empty') {
+    dom.uploadBox.style.display = 'block';
+    dom.singleWorkspace.style.display = 'none';
+    dom.batchArea.style.display = 'none';
+    dom.btnStart.style.display = 'none';
+    dom.btnZip.style.display = 'none';
+    dom.btnClear.disabled = true;
+    dom.btnAdd.textContent = '添加图片';
+  } else if (currentMode === 'single') {
+    dom.uploadBox.style.display = 'none';
+    dom.singleWorkspace.style.display = 'flex';
+    dom.batchArea.style.display = 'none';
+    dom.btnStart.style.display = 'none';
+    dom.btnZip.style.display = 'none';
+    dom.btnClear.disabled = false;
+    dom.btnAdd.textContent = '更换/添加图片';
+    
+    dom.singlePreviewImg.src = singleThumbUrl;
+    updateSingleButtonsState();
+  } else if (currentMode === 'batch') {
+    dom.uploadBox.style.display = 'none';
+    dom.singleWorkspace.style.display = 'none';
+    dom.batchArea.style.display = 'block';
+    dom.btnStart.style.display = 'inline-flex';
+    dom.btnZip.style.display = 'inline-flex';
+    dom.btnClear.disabled = false;
+    dom.btnAdd.textContent = '添加图片';
+    
+    renderBatchQueue();
+  }
+}
+
+function updateBatchStats() {
+  const total = queue.length;
+  const done = queue.filter(q => q.status === 'done').length;
+  dom.statsText.textContent = `共 ${total} 张，已完成 ${done} 张。`;
+
+  dom.btnStart.disabled = isProcessing || total === 0 || queue.every(q => q.status === 'done' || q.status === 'processing');
+  dom.btnZip.disabled = isProcessing || done === 0;
+  dom.btnClear.disabled = isProcessing || total === 0;
+  dom.btnAdd.disabled = isProcessing;
+  dom.directionSelect.disabled = isProcessing;
+  dom.formatSelect.disabled = isProcessing;
+}
+
+function renderBatchQueue() {
+  dom.queueList.innerHTML = '';
+  
+  queue.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'queue-item';
+    
+    let statusHtml = '';
+    if (item.status === 'wait') statusHtml = `<span class="status-text status-wait">等待</span>`;
+    else if (item.status === 'processing') statusHtml = `<span class="status-text status-processing">处理中...</span>`;
+    else if (item.status === 'done') statusHtml = `<span class="status-text status-done">已完成</span>`;
+    else if (item.status === 'error') statusHtml = `<span class="status-text status-error">失败</span>`;
+
+    const sizeStr = item.status === 'done' 
+      ? `${item.originalSizeStr} → ${item.processedSizeStr}` 
+      : item.originalSizeStr;
+
+    let actionsHtml = '';
+    if (item.status === 'done') {
+      actionsHtml = `
+        <button class="action-link" data-action="download" data-id="${item.id}">下载</button>
+        <button class="action-link" data-action="remove" data-id="${item.id}">移除</button>
+      `;
+    } else if (item.status !== 'processing') {
+      actionsHtml = `<button class="action-link" data-action="remove" data-id="${item.id}">移除</button>`;
+    }
+
+    el.innerHTML = `
+      <img class="item-thumb" src="${item.thumbUrl}" alt="缩略图">
+      <div class="item-info">
+        <div class="item-name" title="${item.file.name}">${item.file.name}</div>
+        <div class="item-meta">
+          <span>${item.width}×${item.height}</span>
+          <span>·</span>
+          <span>${sizeStr}</span>
+        </div>
+      </div>
+      <div class="item-actions">
+        ${statusHtml}
+        ${actionsHtml}
+      </div>
+    `;
+    dom.queueList.appendChild(el);
+  });
+
+  updateBatchStats();
+}
+
+/* =========================================================
+   4. 单图模式逻辑
+   ========================================================= */
+function setSingleFile(file) {
+  if (singleThumbUrl) URL.revokeObjectURL(singleThumbUrl);
+  
+  singleFile = file;
+  singleBlob = file;
+  singleDirection = 'original';
+  singleThumbUrl = URL.createObjectURL(file);
+  
+  currentMode = 'single';
+  updateUI();
+}
+
+function updateSingleButtonsState(isProcessing = false) {
+  dom.btnSingleScramble.disabled = isProcessing;
+  dom.btnSingleUnscramble.disabled = isProcessing;
+  dom.btnSingleReset.disabled = isProcessing || singleDirection === 'original';
+  dom.btnSingleDownload.disabled = isProcessing;
+}
+
+async function processSingle(action) {
+  if (!singleFile) return;
+  
+  updateSingleButtonsState(true);
+  dom.singleLoading.style.display = 'flex';
+  await nextTick();
+
+  try {
+    const img = await loadImage(singleFile);
+    const canvas = processCanvas(img, action);
+    const format = dom.formatSelect.value;
+    const blob = await canvasToBlob(canvas, format, format === 'image/jpeg' ? 0.95 : undefined);
+    
+    singleBlob = blob;
+    singleDirection = action;
+    
+    if (singleThumbUrl) URL.revokeObjectURL(singleThumbUrl);
+    singleThumbUrl = URL.createObjectURL(singleBlob);
+    dom.singlePreviewImg.src = singleThumbUrl;
+  } catch (err) {
+    console.error(err);
+    alert('处理失败：' + err.message);
+  } finally {
+    dom.singleLoading.style.display = 'none';
+    updateSingleButtonsState(false);
+  }
+}
+
+dom.btnSingleScramble.addEventListener('click', () => processSingle('scramble'));
+dom.btnSingleUnscramble.addEventListener('click', () => processSingle('unscramble'));
+
+dom.btnSingleReset.addEventListener('click', () => {
+  if (!singleFile) return;
+  singleBlob = singleFile;
+  singleDirection = 'original';
+  if (singleThumbUrl) URL.revokeObjectURL(singleThumbUrl);
+  singleThumbUrl = URL.createObjectURL(singleBlob);
+  dom.singlePreviewImg.src = singleThumbUrl;
+});
+
+dom.btnSingleDownload.addEventListener('click', () => {
+  if (!singleBlob) return;
+  const ext = dom.formatSelect.value === 'image/png' ? 'png' : 'jpg';
+  const suffix = singleDirection === 'scramble' ? '_enc' : singleDirection === 'unscramble' ? '_dec' : '';
+  const name = singleFile.name.replace(/\.[^.]+$/, '') + suffix + '.' + ext;
+  downloadBlob(singleBlob, name);
+});
+
+/* =========================================================
+   5. 文件选择与拖拽上传处理
+   ========================================================= */
+dom.btnAdd.addEventListener('click', () => dom.fileInput.click());
+dom.uploadBox.addEventListener('click', () => dom.fileInput.click());
+
+function handleNewFiles(files) {
+  files = files.filter(f => f.type.startsWith('image/'));
+  if (!files.length) return;
+
+  if (currentMode === 'single') {
+    if (files.length === 1) {
+      setSingleFile(files[0]);
+    } else {
+      addToQueue(singleFile);
+      files.forEach(addToQueue);
+      currentMode = 'batch';
+      updateUI();
+      processQueueDimensions();
+    }
+  } else if (currentMode === 'empty') {
+    if (files.length === 1) {
+      setSingleFile(files[0]);
+    } else {
+      files.forEach(addToQueue);
+      currentMode = 'batch';
+      updateUI();
+      processQueueDimensions();
+    }
+  } else if (currentMode === 'batch') {
+    files.forEach(addToQueue);
+    renderBatchQueue();
+    processQueueDimensions();
+  }
+}
+
+dom.fileInput.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  handleNewFiles(files);
+});
+
+// 拖拽上传支持
+dom.uploadBox.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dom.uploadBox.classList.add('dragover');
+});
+dom.uploadBox.addEventListener('dragleave', () => {
+  dom.uploadBox.classList.remove('dragover');
+});
+dom.uploadBox.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dom.uploadBox.classList.remove('dragover');
+  handleNewFiles(Array.from(e.dataTransfer.files || []));
+});
+
+// 全局拖拽（防误触，覆盖整个页面）
+document.body.addEventListener('dragover', (e) => e.preventDefault());
+document.body.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (e.target.closest('#uploadBox')) return;
+  handleNewFiles(Array.from(e.dataTransfer.files || []));
+});
+
+/* =========================================================
+   6. 批量处理逻辑
+   ========================================================= */
+function addToQueue(file) {
+  const thumbUrl = URL.createObjectURL(file);
+  queue.push({
+    id: ++uid,
+    file,
+    status: 'wait',
+    originalSizeStr: formatSize(file.size),
+    processedBlob: null,
+    processedSizeStr: '',
+    thumbUrl,
+    width: 0,
+    height: 0,
+    direction: 'unscramble'
+  });
+}
+
+async function processQueueDimensions() {
+  const pending = queue.filter(q => q.width === 0);
+  for (const item of pending) {
+    try {
+      const img = await loadImage(item.file);
+      item.width = img.naturalWidth || img.width;
+      item.height = img.naturalHeight || img.height;
+      if (currentMode === 'batch') renderBatchQueue();
+    } catch (e) {}
+  }
+}
+
+dom.queueList.addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') return;
+  const action = e.target.dataset.action;
+  const id = parseInt(e.target.dataset.id);
+  if (!action || !id) return;
+
+  const index = queue.findIndex(q => q.id === id);
+  if (index === -1) return;
+  const item = queue[index];
+
+  if (action === 'remove') {
+    if (isProcessing) return;
+    URL.revokeObjectURL(item.thumbUrl);
+    queue.splice(index, 1);
+    if (queue.length === 0) {
+      currentMode = 'empty';
+      updateUI();
+    } else {
+      renderBatchQueue();
+    }
+  } else if (action === 'download') {
+    if (item.processedBlob) {
+      const ext = item.processedBlob.type === 'image/png' ? 'png' : 'jpg';
+      const suffix = item.direction === 'scramble' ? '_enc' : '_dec';
+      const name = item.file.name.replace(/\.[^.]+$/, '') + suffix + '.' + ext;
+      downloadBlob(item.processedBlob, name);
+    }
+  }
+});
+
+dom.btnClear.addEventListener('click', () => {
+  if (isProcessing) return;
+  if (currentMode === 'single') {
+    if (confirm('确定要清除当前图片吗？')) {
+      if (singleThumbUrl) URL.revokeObjectURL(singleThumbUrl);
+      currentMode = 'empty';
+      updateUI();
+    }
+    return;
+  }
+  if (queue.length && !confirm('确定要清空当前队列吗？')) return;
+  queue.forEach(q => URL.revokeObjectURL(q.thumbUrl));
+  queue = [];
+  currentMode = 'empty';
+  updateUI();
+});
+
+function resetDoneItems(message) {
+  let resetCount = 0;
+  queue.forEach(q => {
+    if (q.status === 'done') {
+      q.status = 'wait';
+      q.processedBlob = null;
+      q.processedSizeStr = '';
+      resetCount++;
+    }
+  });
+  if (resetCount > 0) {
+    renderBatchQueue();
+    alert(message);
+  }
+}
+
+dom.directionSelect.addEventListener('change', () => resetDoneItems('处理方向已更改，已完成的图片需要重新处理。'));
+dom.formatSelect.addEventListener('change', () => resetDoneItems('输出格式已更改，已完成的图片需要重新处理以应用新格式。'));
+
+dom.btnStart.addEventListener('click', async () => {
+  if (isProcessing) return;
+  isProcessing = true;
+  updateBatchStats();
+
+  const format = dom.formatSelect.value;
+  const direction = dom.directionSelect.value;
+  const pendingItems = queue.filter(q => q.status === 'wait');
+  
+  for (let i = 0; i < pendingItems.length; i++) {
+    const item = pendingItems[i];
+    item.status = 'processing';
+    item.direction = direction;
+    renderBatchQueue();
+    await nextTick();
+
+    try {
+      const img = await loadImage(item.file);
+      if (item.width === 0) {
+        item.width = img.naturalWidth || img.width;
+        item.height = img.naturalHeight || img.height;
+      }
+
+      const canvas = processCanvas(img, direction);
+      const blob = await canvasToBlob(canvas, format, format === 'image/jpeg' ? 0.95 : undefined);
+      
+      item.processedBlob = blob;
+      item.processedSizeStr = formatSize(blob.size);
+      item.status = 'done';
+    } catch (err) {
+      console.error(err);
+      item.status = 'error';
+    }
+
+    renderBatchQueue();
+    await nextTick();
+  }
+
+  isProcessing = false;
+  updateBatchStats();
+  alert('批量处理完成！');
+});
+
+dom.btnZip.addEventListener('click', async () => {
+  const doneItems = queue.filter(q => q.status === 'done' && q.processedBlob);
+  if (doneItems.length === 0) return;
+
+  dom.btnZip.disabled = true;
+  dom.btnZip.textContent = '打包中...';
+
+  try {
+    const entries = [];
+    for (const item of doneItems) {
+      const ext = item.processedBlob.type === 'image/png' ? 'png' : 'jpg';
+      const suffix = item.direction === 'scramble' ? '_enc' : '_dec';
+      const name = item.file.name.replace(/\.[^.]+$/, '') + suffix + '.' + ext;
+      
+      entries.push({
+        name: name,
+        data: new Uint8Array(await item.processedBlob.arrayBuffer())
+      });
+    }
+    const zipBlob = createZip(entries);
+    const timeStr = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    downloadBlob(zipBlob, `batch_process_${timeStr}.zip`);
+  } catch (err) {
+    console.error(err);
+    alert('打包失败：' + err.message);
+  } finally {
+    dom.btnZip.textContent = '打包下载 ZIP';
+    updateBatchStats();
+  }
+});
+
+/* =========================================================
+   7. 辅助函数
+   ========================================================= */
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图片解码失败')); };
+    img.src = url;
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('编码失败')), type, quality);
+  });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+const nextTick = () => new Promise(r => setTimeout(r, 10));
+
+// 初始化
+updateUI();
+</script>
+</body>
+</html>
